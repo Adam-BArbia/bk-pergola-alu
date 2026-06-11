@@ -1,184 +1,149 @@
-# BK Pergola et Alu - Professional Catalog Website
+# BK Pergola et Alu - Professional Website
 
-A production-ready website for **BK pergola et alu**, showcasing aluminum pergolas and metal structures with a focus on lead generation and portfolio showcase.
+Professional catalog and lead generation website for **BK pergola et alu** — specializing in aluminum pergola and metal structure construction for residential and commercial clients.
 
 ## 🎯 Project Overview
 
-- **Company**: BK pergola et alu (Tunisia-based)
-- **Domain**: bk-pergola.tn
-- **Hosting**: OVHcloud Startup
-- **Timeline**: 2-3 weeks
-- **Tech Stack**: Angular 17 (Frontend) + Symfony 6 (Backend) + MySQL
+**Tech Stack:**
+- **Frontend:** Angular 17.x (standalone components) + TailwindCSS
+- **Backend:** Symfony 6.x REST API
+- **Database:** MySQL 8.0
+- **Hosting:** OVHcloud Startup (Tunisia)
+- **Domain:** bk-pergola.tn (SSL via Let's Encrypt)
+- **Email:** Zimbra SMTP (included with hosting)
+- **Video:** OVHcloud Video Center (free)
 
-## 📋 Key Features
+**Core Features:**
+- 🎨 Responsive portfolio gallery with image optimization
+- 📞 Multi-channel lead capture (Email, WhatsApp, Phone)
+- 👥 Team member profiles
+- 🛠️ Admin panel (project CRUD, gallery management, lead tracking)
+- 🌍 i18n infrastructure (French + Arabic ready)
+- 📊 SEO optimized (meta tags, schema.org, sitemap, robots.txt)
+- ⚡ Performance optimized (lazy loading, image optimization, caching)
+- 📱 Mobile-first responsive design
 
-### Lead Generation
-- Contact form (email, phone, message)
-- WhatsApp integration (simple link)
-- Admin dashboard for lead management
-- Email notifications via Zimbra SMTP
+## 📊 Project Stats
 
-### Portfolio Showcase
-- Dynamic project gallery
-- Project categories and filtering
-- Responsive image display
-- Admin panel for project management
+- **Launch Timeline:** 2-3 weeks
+- **Expected Monthly Visitors:** ~3,000
+- **Pages:** 6 main (Home, Portfolio, Services, Team, Contact, About)
+- **Admin Features:** Project/Gallery CRUD, multi-channel lead dashboard, contact management
+- **Authentication:** Multi-admin support (password-protected, bcrypt-hashed, session-based)
+- **Priority Device:** Mobile phone → desktop
 
-### Company Info
-- Homepage with hero section
-- Services overview
-- Team profiles
-- SEO optimization
+## 📚 Documentation
 
-### Internationalization
-- French (primary)
-- Arabic infrastructure (translations ready)
-- RTL support for Arabic
-
-## 📁 Project Structure
-
-```
-bk-pergola-alu/
-├── docs/                          # Complete documentation
-│   ├── ARCHITECTURE.md            # System design & flow
-│   ├── DATABASE.md                # Schema & relationships
-│   ├── API_SPEC.md                # All endpoints
-│   ├── PROJECT_STRUCTURE.md       # File structure
-│   ├── SETUP_GUIDE.md             # Local development
-│   ├── DEPLOYMENT.md              # OVHcloud deployment
-│   ├── SECURITY.md                # Security checklist
-│   ├── DEVELOPMENT_PLAN.md        # Week-by-week timeline
-│   ├── ADMIN_PANEL.md             # Admin features
-│   ├── I18N_SETUP.md              # Internationalization
-│   └── TAILWIND_GUIDE.md          # CSS framework guide
-├── backend/                       # Symfony API
-│   ├── src/
-│   ├── config/
-│   ├── migrations/
-│   ├── public/
-│   ├── .env.example
-│   ├── composer.json
-│   └── symfony.lock
-├── frontend/                      # Angular App
-│   ├── src/
-│   ├── angular.json
-│   ├── package.json
-│   └── tsconfig.json
-├── docker-compose.yml             # Local dev environment (optional)
-└── README.md                       # This file
-```
+| Document | Purpose |
+|----------|---------|
+| [ARCHITECTURE.md](./docs/ARCHITECTURE.md) | System design, deployment model, tech decisions |
+| [DATABASE.md](./docs/DATABASE.md) | Complete schema, relationships, migrations |
+| [API_SPEC.md](./docs/API_SPEC.md) | All REST endpoints, request/response examples |
+| [PROJECT_STRUCTURE.md](./docs/PROJECT_STRUCTURE.md) | Directory tree and file manifest |
+| [SETUP.md](./docs/SETUP.md) | Local development environment |
+| [DEPLOYMENT.md](./docs/DEPLOYMENT.md) | OVHcloud deployment guide |
+| [SECURITY.md](./docs/SECURITY.md) | Authentication, CORS, validation, secrets |
+| [DEVELOPMENT_PLAN.md](./docs/DEVELOPMENT_PLAN.md) | Week-by-week sprint schedule |
+| [ADMIN_PANEL.md](./docs/ADMIN_PANEL.md) | Admin features and mockup |
+| [I18N_SETUP.md](./docs/I18N_SETUP.md) | Internationalization (FR/AR) infrastructure |
 
 ## 🚀 Quick Start
 
 ### Prerequisites
-- PHP 8.1+
 - Node.js 18+
-- MySQL 8.0+
+- PHP 8.1+
+- MySQL 8.0
+- Git
 - Composer
-- Angular CLI
 
-### Local Development Setup
+### Local Development
 
-1. **Clone repository**
-```bash
-git clone https://github.com/Adam-BArbia/bk-pergola-alu.git
-cd bk-pergola-alu
-```
+See [SETUP.md](./docs/SETUP.md) for detailed instructions.
 
-2. **Backend setup** (see `docs/SETUP_GUIDE.md`)
-```bash
-cd backend
-composer install
-cp .env.example .env
-# Configure database in .env
-php bin/console doctrine:migrations:migrate
-php bin/console server:run
-```
+### Deploy to OVHcloud
 
-3. **Frontend setup** (see `docs/SETUP_GUIDE.md`)
-```bash
-cd ../frontend
-npm install
-ng serve
-```
+See [DEPLOYMENT.md](./docs/DEPLOYMENT.md) for step-by-step instructions.
 
-4. Open `http://localhost:4200`
+## 🎨 Key Design Decisions
 
-## 📚 Documentation
+### Frontend: Angular 17 Standalone + TailwindCSS
+- **Why Standalone?** Simplified, modern Angular (no NgModule boilerplate)
+- **Why TailwindCSS?** Utility-first, custom look (avoids "Bootstrap template" feel)
+- **Why not NgRx?** Services + RxJS Observables scale fine for this volume
 
-All detailed documentation is in the `docs/` folder:
+### Backend: Symfony REST API
+- **Why REST, not GraphQL?** Simpler, stateless, easier to test and secure
+- **Why Symfony?** Familiar (you've used it), built-in auth, validation, error handling
 
-| Document | Purpose |
-|----------|---------|
-| **ARCHITECTURE.md** | System design, component flow, tech decisions |
-| **DATABASE.md** | Complete MySQL schema with relationships |
-| **API_SPEC.md** | All backend endpoints with examples |
-| **PROJECT_STRUCTURE.md** | Every file and folder to create |
-| **SETUP_GUIDE.md** | Local dev environment setup |
-| **DEPLOYMENT.md** | Step-by-step OVHcloud deployment |
-| **SECURITY.md** | Security checklist and best practices |
-| **DEVELOPMENT_PLAN.md** | Week-by-week sprint plan |
-| **ADMIN_PANEL.md** | Admin features and design |
-| **I18N_SETUP.md** | French/Arabic setup |
-| **TAILWIND_GUIDE.md** | CSS framework tutorial |
+### Database: MySQL with Doctrine ORM
+- **Why ORM?** Type-safe, migrations, relationship management
+- **Why MySQL?** Included with OVHcloud Startup, reliable, proven
 
-## 🔄 Development Workflow
+### Email & Lead Capture
+- **SMTP:** Direct from OVHcloud Zimbra (free, already paid for)
+- **WhatsApp:** Simple `wa.me/` button (free, immediate)
+- **Multi-channel Admin Dashboard:** All leads in one inbox, tagged by source
 
-1. **Read `ARCHITECTURE.md`** - Understand the system
-2. **Read `DEVELOPMENT_PLAN.md`** - Know what to build each week
-3. **Follow `SETUP_GUIDE.md`** - Set up local environment
-4. **Reference `API_SPEC.md`** - Build backend endpoints
-5. **Reference `PROJECT_STRUCTURE.md`** - Create files
-6. **Follow `DEPLOYMENT.md`** - Deploy to OVHcloud
+### Authentication
+- **Sessions, not JWT:** Simple, secure for multi-admin, no token complexity
+- **Passwords:** bcrypt-hashed, stored in database
+- **Timeout:** 8 hours of inactivity
+- **Future-ready:** Easy to add more admins through DB
 
-## 🛠️ Tech Stack Details
+### i18n (Internationalization)
+- **Day 1:** French only, full infrastructure ready
+- **Later:** Add Arabic with RTL layout (dictionary files added when needed)
+- **Storage:** Static JSON translation files (no DB overhead)
 
-### Frontend
-- **Angular 17** with standalone components
-- **Tailwind CSS** for styling
-- **RxJS** for reactive programming
-- **Angular i18n** for French/Arabic
+## 🔐 Security Highlights
 
-### Backend
-- **Symfony 6** with API Platform
-- **Doctrine ORM** for database
-- **MySQL** for data storage
-- **Symfony Mailer** for email notifications
-
-### Hosting
-- **OVHcloud Startup** PHP hosting
-- **Zimbra SMTP** for email (built-in)
-- **Video Center Free** for videos
-- **Let's Encrypt SSL** (free)
-
-## 📊 Key Metrics
-
-- **Target users**: ~3,000/month
-- **Page load**: <2-3 seconds
-- **Mobile-first design**: Phone → Tablet → Desktop
-- **SEO**: Optimized with schema.org
-
-## 🔐 Security Features
-
-- ✅ Password hashing (bcrypt)
-- ✅ Session-based authentication
-- ✅ CSRF protection
+- ✅ Passwords hashed with bcrypt
+- ✅ CSRF protection on forms
 - ✅ Input validation & sanitization
-- ✅ SQL injection prevention (Doctrine ORM)
-- ✅ CORS configuration
-- ✅ Rate limiting on forms
+- ✅ CORS configured (same domain)
+- ✅ Rate limiting on contact form
+- ✅ Admin session timeout (8 hours)
+- ✅ Secrets in .env (not committed)
+- ✅ SQL injection prevented (Doctrine ORM)
 
-## 📞 Contact & Support
+## 📊 Admin Panel Features
 
-For questions about this project structure, refer to the documentation files. For company information:
-- **Email**: contact@bk-pergola.tn
-- **WhatsApp**: [Link on website]
-- **Website**: bk-pergola.tn
+- **Project Management:** Create, edit, delete projects with full CRUD
+- **Gallery Management:** Upload/manage project images with optimized storage
+- **Lead Dashboard:** View all contacts (email + WhatsApp) with status tracking
+- **Contact Status:** Mark leads as "New", "Contacted", "Converted"
+- **CSV Export:** Download leads for CRM integration
+- **Team Management:** Manage team member profiles
+- **Settings:** Email templates, contact preferences
 
-## 📄 License
+## 📈 Performance Targets
 
-This project is for BK pergola et alu. All rights reserved.
+- **Page Load Time:** <2s ideal, <3s acceptable
+- **Lighthouse Score:** 90+
+- **Mobile-first:** Optimized for phones, scalable to desktop
+- **Image Optimization:** Lazy loading, responsive sizing
+- **Caching:** Browser cache + HTTP headers
+
+## 🎓 Development Approach
+
+This is your first production project. Documentation includes:
+- ✅ Detailed explanations (not just code)
+- ✅ Week-by-week sprint plan (realistic timeline)
+- ✅ Learning resources for new concepts (RxJS, Tailwind, etc.)
+- ✅ Common pitfalls and solutions
+- ✅ Testing & debugging strategies
+
+## 📞 Support
+
+All documentation is self-contained. See specific doc for help with:
+- Setup issues → [SETUP.md](./docs/SETUP.md)
+- Deployment problems → [DEPLOYMENT.md](./docs/DEPLOYMENT.md)
+- API questions → [API_SPEC.md](./docs/API_SPEC.md)
+- Admin panel → [ADMIN_PANEL.md](./docs/ADMIN_PANEL.md)
 
 ---
 
-**Ready to build?** Start with `docs/ARCHITECTURE.md` → `docs/DEVELOPMENT_PLAN.md` → `docs/SETUP_GUIDE.md`
+**Project Owner:** BK Pergola et Alu  
+**Repository:** https://github.com/Adam-BArbia/bk-pergola-alu  
+**Domain:** bk-pergola.tn  
+**Launch Target:** 2-3 weeks
