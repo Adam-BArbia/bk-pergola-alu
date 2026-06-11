@@ -13,14 +13,15 @@
 - **Scalability:** Indexed on frequently queried columns
 - **Integrity:** Foreign keys ensure referential integrity
 - **Type Safety:** Doctrine ORM handles type conversion
+- **Flexibility:** Gallery items can be standalone or part of projects
 
 ### Tables at a Glance
 
 | Table | Purpose | Records |
 |-------|---------|---------|
 | `admins` | Admin users | ~5 (estimated) |
-| `projects` | Portfolio projects | ~20-50 |
-| `project_images` | Images per project | ~100-200 |
+| `projects` | Portfolio project metadata | ~20-50 |
+| `gallery_items` | Individual photos (standalone or in projects) | ~150-300 |
 | `contacts` | Lead submissions | ~100-300/month |
 | `team_members` | Team profiles | ~5 |
 
@@ -104,7 +105,7 @@ CREATE TABLE admins (
 
 ## 3. Table: `projects`
 
-**Purpose:** Portfolio projects displayed on gallery
+**Purpose:** Portfolio project metadata (grouping for related gallery items)
 
 **Doctrine Entity:**
 ```php
@@ -127,29 +128,29 @@ class Project
     private int $id;
 
     #[ORM\Column(type: 'string', length: 255)]
-    private string $title; // FR
+    private string $title; // FR - Project name
 
-    #[ORM\Column(type: 'text')]
-    private string $description; // FR
+    #[ORM\Column(type: 'text', nullable: true)]
+    private ?string $description = null; // FR - Project details
 
     #[ORM\Column(type: 'string', length: 50)]
     private string $category; // 'pergola', 'structure', 'custom'
 
     #[ORM\Column(type: 'string', length: 255, nullable: true)]
-    private ?string $location = null;
+    private ?string $location = null; // Where built
 
     #[ORM\Column(type: 'date', nullable: true)]
     private ?\DateTimeInterface $completionDate = null;
 
     #[ORM\Column(type: 'boolean')]
-    private bool $featured = false;
+    private bool $featured = false; // Show on homepage
 
     #[ORM\Column(type: 'integer')]
-    private int $displayOrder = 0;
+    private int $displayOrder = 0; // Sort order
 
-    #[ORM\OneToMany(mappedBy: 'project', targetEntity: ProjectImage::class, cascade: ['persist', 'remove'])]
+    #[ORM\OneToMany(mappedBy: 'project', targetEntity: GalleryItem::class, cascade: ['persist', 'remove'])]
     #[ORM\OrderBy(['position' => 'ASC'])]
-    private Collection $images;
+    private Collection $galleryItems; // Related photos
 
     #[ORM\Column(type: 'datetime_immutable')]
     private \DateTimeImmutable $createdAt;
@@ -166,7 +167,7 @@ class Project
 CREATE TABLE projects (
     id INT AUTO_INCREMENT PRIMARY KEY,
     title VARCHAR(255) NOT NULL,
-    description LONGTEXT NOT NULL,
+    description LONGTEXT NULL,
     category VARCHAR(50) NOT NULL,
     location VARCHAR(255) NULL,
     completion_date DATE NULL,
@@ -182,14 +183,14 @@ CREATE TABLE projects (
 
 **Fields:**
 - `id` - Primary key
-- `title` - Project name (FR)
-- `description` - Project details (FR)
+- `title` - Project name (FR) - Optional if standalone photos used
+- `description` - Project details (FR) - Optional
 - `category` - Type: 'pergola', 'structure', 'custom'
 - `location` - Where built (city/region)
 - `completion_date` - When completed
 - `featured` - Show on homepage
 - `display_order` - Sort order in gallery
-- `created_at` - When added to portfolio
+- `created_at` - When added
 - `updated_at` - Last modified
 
 **Indexes:**
@@ -197,27 +198,21 @@ CREATE TABLE projects (
 - `idx_category` - Filter by category
 - `idx_created_at` - Sort by date
 
-**Example Data:**
-```sql
-INSERT INTO projects (title, description, category, location, completion_date, featured, display_order, created_at, updated_at)
-VALUES (
-    'Pergola Aluminium Résidence Tunis',
-    'Pergola moderne en aluminium pour résidence privée. Dimensions: 5m x 3m. Finition: blanc mat.',
-    'pergola',
-    'Tunis',
-    '2025-03-15',
-    TRUE,
-    1,
-    NOW(),
-    NOW()
-);
-```
+**Use Cases:**
+- Full project: "Pergola Tunis 2025" with 5+ photos
+- Minimal project: Just a container for related photos (title + 1-2 photos)
+- Optional: Leave title/description empty for pure gallery organization
 
 ---
 
-## 4. Table: `project_images`
+## 4. Table: `gallery_items` (New - Replaces project_images)
 
-**Purpose:** Images associated with projects (1 project → many images)
+**Purpose:** Individual photos in the gallery (standalone or grouped by project)
+
+**Key Difference from Old Structure:**
+- Old: `project_images` were tied to projects only
+- New: `gallery_items` can be standalone (project_id = null) OR linked to projects
+- Enables Pinterest-like flexible gallery
 
 **Doctrine Entity:**
 ```php
@@ -226,36 +221,49 @@ namespace App\Entity;
 
 use Doctrine\ORM\Mapping as ORM;
 
-#[ORM\Entity(repositoryClass: ProjectImageRepository::class)]
-#[ORM\Table(name: 'project_images')]
-class ProjectImage
+#[ORM\Entity(repositoryClass: GalleryItemRepository::class)]
+#[ORM\Table(name: 'gallery_items')]
+#[ORM\Index(name: 'idx_project_id', columns: ['project_id'])]
+#[ORM\Index(name: 'idx_featured', columns: ['featured'])]
+#[ORM\Index(name: 'idx_keywords', columns: ['keywords'])]
+#[ORM\Index(name: 'idx_created_at', columns: ['created_at'])]
+class GalleryItem
 {
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column(type: 'integer')]
     private int $id;
 
-    #[ORM\ManyToOne(targetEntity: Project::class, inversedBy: 'images')]
-    #[ORM\JoinColumn(name: 'project_id', referencedColumnName: 'id', onDelete: 'CASCADE')]
-    private Project $project;
+    #[ORM\ManyToOne(targetEntity: Project::class, inversedBy: 'galleryItems')]
+    #[ORM\JoinColumn(name: 'project_id', referencedColumnName: 'id', onDelete: 'CASCADE', nullable: true)]
+    private ?Project $project = null; // NULL = standalone photo
 
     #[ORM\Column(type: 'string', length: 255)]
-    private string $imagePath; // Relative path: projects/2025/pergola-01.jpg
+    private string $imagePath; // Full path: /uploads/gallery/2025/pergola-01.jpg
 
     #[ORM\Column(type: 'string', length: 255, nullable: true)]
-    private ?string $thumbnailPath = null; // thumbs/2025/pergola-01.jpg
+    private ?string $thumbnailPath = null; // Optimized thumb
+
+    #[ORM\Column(type: 'text', nullable: true)]
+    private ?string $description = null; // Photo description (FR)
 
     #[ORM\Column(type: 'string', length: 255, nullable: true)]
-    private ?string $altText = null; // For accessibility
+    private ?string $altText = null; // SEO alt text
+
+    #[ORM\Column(type: 'text', nullable: true)]
+    private ?string $keywords = null; // Comma-separated: "pergola,aluminium,terrasse"
 
     #[ORM\Column(type: 'integer')]
-    private int $position = 0; // Display order within project
+    private int $position = 0; // Order within project (if part of project)
 
     #[ORM\Column(type: 'integer', nullable: true)]
-    private ?int $width = null; // Image dimensions
+    private ?int $width = null; // Image width pixels
 
     #[ORM\Column(type: 'integer', nullable: true)]
-    private ?int $height = null;
+    private ?int $height = null; // Image height pixels
+
+    #[ORM\Column(type: 'boolean')]
+    private bool $featured = false; // Highlight in gallery
 
     #[ORM\Column(type: 'datetime_immutable')]
     private \DateTimeImmutable $uploadedAt;
@@ -266,33 +274,73 @@ class ProjectImage
 
 **SQL:**
 ```sql
-CREATE TABLE project_images (
+CREATE TABLE gallery_items (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    project_id INT NOT NULL,
+    project_id INT NULL,
     image_path VARCHAR(255) NOT NULL,
     thumbnail_path VARCHAR(255) NULL,
+    description LONGTEXT NULL,
     alt_text VARCHAR(255) NULL,
+    keywords VARCHAR(255) NULL,
     position INT DEFAULT 0,
     width INT NULL,
     height INT NULL,
+    featured BOOLEAN DEFAULT FALSE,
     uploaded_at DATETIME NOT NULL,
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-    INDEX idx_project_id (project_id)
+    INDEX idx_project_id (project_id),
+    INDEX idx_featured (featured),
+    INDEX idx_keywords (keywords),
+    INDEX idx_created_at (uploaded_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
 **Fields:**
 - `id` - Primary key
-- `project_id` - Foreign key to projects
-- `image_path` - Full path (e.g., `/uploads/projects/2025/pergola-01.jpg`)
-- `thumbnail_path` - Optimized thumbnail path
-- `alt_text` - SEO + accessibility (describe image)
-- `position` - Order within gallery
+- `project_id` - Foreign key to projects (NULL = standalone photo)
+- `image_path` - Full path to image file
+- `thumbnail_path` - Optimized thumbnail for gallery grid
+- `description` - Photo caption (FR) - Shows in lightbox
+- `alt_text` - SEO + accessibility
+- `keywords` - Searchable tags: "pergola,aluminium,moderne,terrasse"
+- `position` - Order within project (if grouped)
 - `width`, `height` - For responsive sizing
+- `featured` - Pin to top of gallery
 - `uploaded_at` - Upload timestamp
 
 **Indexes:**
-- `idx_project_id` - Find images by project
+- `idx_project_id` - Find photos in project
+- `idx_featured` - Featured photos for homepage
+- `idx_keywords` - Search by keywords
+- `idx_created_at` - Sort by date
+
+**Examples:**
+
+Standalone photo:
+```sql
+INSERT INTO gallery_items (project_id, image_path, description, keywords, featured, uploaded_at)
+VALUES (
+    NULL, -- No project
+    '/uploads/gallery/2025/before-after-01.jpg',
+    'Transformation avant/après d\'une installation',
+    'pergola,aluminium,transformation,avant-après',
+    TRUE,
+    NOW()
+);
+```
+
+Project photo:
+```sql
+INSERT INTO gallery_items (project_id, image_path, description, keywords, position, uploaded_at)
+VALUES (
+    1, -- Part of project 1
+    '/uploads/gallery/2025/pergola-main.jpg',
+    'Vue générale de la pergola installée',
+    'pergola,vue-générale',
+    0,
+    NOW()
+);
+```
 
 ---
 
@@ -391,27 +439,6 @@ CREATE TABLE contacts (
 - `replied_at` - When admin replied
 - `ip_address` - Source IP (spam prevention)
 
-**Indexes:**
-- `idx_status` - Filter by status in dashboard
-- `idx_source` - See breakdown by channel
-- `idx_created_at` - Sort by date
-
-**Example Data:**
-```sql
-INSERT INTO contacts (name, email, phone, subject, message, status, source, created_at, ip_address)
-VALUES (
-    'Ahmed Ben Ali',
-    'ahmed@example.tn',
-    '+21622334455',
-    'Demande de devis pergola',
-    'Bonjour, je suis intéressé par une pergola pour ma terrasse...',
-    'new',
-    'form',
-    NOW(),
-    '192.168.1.1'
-);
-```
-
 ---
 
 ## 6. Table: `team_members`
@@ -483,62 +510,127 @@ CREATE TABLE team_members (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
-**Fields:**
-- `id` - Primary key
-- `name` - Full name
-- `title` - Job title (FR)
-- `bio` - Short biography (FR)
-- `image_path` - Profile photo path
-- `position` - Display order on team page
-- `email` - Contact email
-- `phone` - Phone number
-- `is_active` - Show/hide on website
-- `created_at` - Added to team
-
 ---
 
-## 7. Entity Relationships Diagram
+## 7. Entity Relationships Diagram (Updated)
 
 ```
 admins (1) ────────────────────────────────────── (many) projects
            [admin creates/manages projects]
 
-projects (1) ────────────────────────────────────── (many) project_images
-            [1 project has multiple images]
+projects (1) ────────────────────────────────────── (many) gallery_items
+            [1 project has many gallery items]
 
-contacts (0..1) ────────────────────────────────── (many) admins
-               [Contact assigned to admin - future feature]
+gallery_items
+  ├─ (0..1) → projects [optional - can be standalone]
+  └─ searchable by keywords
 
-team_members [standalone - no foreign keys]
+contacts [standalone - no FK]
+
+team_members [standalone - no FK]
 ```
 
-**Relationship Summary:**
-
-| From | To | Type | Cascade |
-|------|-----|------|---------|
-| projects | project_images | 1:N | ON DELETE CASCADE |
-| admins | projects | 1:N | - |
-| admins | contacts | 1:N | - (optional) |
+**Key Change:**
+- Old: `project_images` mandatory tied to projects
+- New: `gallery_items` optional tied to projects (enables standalone photos)
 
 ---
 
-## 8. Database Migrations (Doctrine)
+## 8. Gallery Logic (Frontend/Backend)
+
+### Pinterest Feed Display
+
+**GET /api/gallery** - All gallery items (for Pinterest feed)
+```php
+// Repository Query
+$items = $em->getRepository(GalleryItem::class)
+    ->createQueryBuilder('g')
+    ->orderBy('g.featured', 'DESC') // Featured first
+    ->addOrderBy('g.uploadedAt', 'DESC') // Then by date
+    ->getQuery()
+    ->getResult();
+
+// Response: Array of 150+ gallery items (thumbnails)
+```
+
+**GET /api/gallery/{id}** - Single item with related project photos
+```php
+// Get the item
+$item = $em->getRepository(GalleryItem::class)->find($id);
+
+// If has project, get related images
+$relatedImages = [];
+if ($item->getProject()) {
+    $relatedImages = $em->getRepository(GalleryItem::class)
+        ->createQueryBuilder('g')
+        ->where('g.project = :project')
+        ->andWhere('g.id != :id')
+        ->setParameter('project', $item->getProject())
+        ->setParameter('id', $id)
+        ->orderBy('g.position', 'ASC')
+        ->getQuery()
+        ->getResult();
+}
+
+// Response: { item, description, keywords, relatedImages }
+```
+
+**GET /api/gallery/search?q=pergola** - Search by keywords
+```php
+$query = $request->query->get('q');
+$items = $em->getRepository(GalleryItem::class)
+    ->createQueryBuilder('g')
+    ->where('g.keywords LIKE :query')
+    ->orWhere('g.description LIKE :query')
+    ->setParameter('query', '%' . $query . '%')
+    ->orderBy('g.uploadedAt', 'DESC')
+    ->getQuery()
+    ->getResult();
+```
+
+---
+
+## 9. Admin Gallery Management (CRUD)
+
+### Admin Can:
+
+1. **Upload standalone photo:**
+   - Image file
+   - Description (FR)
+   - Keywords (comma-separated)
+   - Featured (yes/no)
+   - *No project selected*
+
+2. **Add photo to existing project:**
+   - Image file
+   - Select project
+   - Description
+   - Keywords
+   - Position in project (drag-drop order)
+
+3. **Create project + add photos:**
+   - Project title (FR)
+   - Project description (FR)
+   - Category
+   - Location
+   - Completion date
+   - Then upload 1+ photos
+
+---
+
+## 10. Database Migrations (Updated)
 
 ### Generate Initial Schema
 
 ```bash
-# Generate migration file (from entities)
 php bin/console make:migration
-
-# Apply to database
 php bin/console doctrine:migrations:migrate
 ```
 
-### Migration File Structure
+### Migration File
 
 ```php
 <?php
-
 namespace DoctrineMigrations;
 
 use Doctrine\DBAL\Schema\Schema;
@@ -546,24 +638,19 @@ use Doctrine\Migrations\AbstractMigration;
 
 final class Version20260611000000 extends AbstractMigration
 {
-    public function getDescription(): string
-    {
-        return 'Create initial tables';
-    }
-
     public function up(Schema $schema): void
     {
         $this->addSql('CREATE TABLE admins (...)');
         $this->addSql('CREATE TABLE projects (...)');
-        $this->addSql('CREATE TABLE project_images (...)');
+        $this->addSql('CREATE TABLE gallery_items (...)'); // NEW
         $this->addSql('CREATE TABLE contacts (...)');
         $this->addSql('CREATE TABLE team_members (...)');
     }
 
     public function down(Schema $schema): void
     {
+        $this->addSql('DROP TABLE IF EXISTS gallery_items'); // NEW
         $this->addSql('DROP TABLE IF EXISTS contacts');
-        $this->addSql('DROP TABLE IF EXISTS project_images');
         $this->addSql('DROP TABLE IF EXISTS projects');
         $this->addSql('DROP TABLE IF EXISTS admins');
         $this->addSql('DROP TABLE IF EXISTS team_members');
@@ -573,128 +660,45 @@ final class Version20260611000000 extends AbstractMigration
 
 ---
 
-## 9. Indexes for Performance
+## 11. Indexes for Performance (Updated)
 
-### Current Indexes
-
-| Table | Index | Purpose | Query Speed |
-|-------|-------|---------|-------------|
-| admins | idx_username | Login lookup | O(log n) |
-| projects | idx_featured | Homepage featured projects | O(log n) |
-| projects | idx_category | Filter by category | O(log n) |
-| projects | idx_created_at | Sort by date | O(log n) |
-| project_images | idx_project_id | Find images by project | O(log n) |
-| contacts | idx_status | Dashboard filters | O(log n) |
-| contacts | idx_source | Channel breakdown | O(log n) |
-| contacts | idx_created_at | Sort by date | O(log n) |
-| team_members | idx_position | Sort on page | O(log n) |
-
-### Future Indexes (If Scaling)
-
-```sql
--- If full-text search on projects
-CREATE FULLTEXT INDEX ft_title_description ON projects(title, description);
-
--- If many contacts
-CREATE INDEX idx_email ON contacts(email); -- Find duplicate submissions
-CREATE INDEX idx_phone ON contacts(phone);
-
--- If caching by date range
-CREATE INDEX idx_created_status ON contacts(created_at, status);
-```
+| Table | Index | Purpose |
+|-------|-------|---------|
+| admins | idx_username | Login lookup |
+| projects | idx_featured | Homepage projects |
+| projects | idx_category | Filter by type |
+| projects | idx_created_at | Sort by date |
+| gallery_items | idx_project_id | Find photos in project |
+| gallery_items | idx_featured | Featured gallery items |
+| gallery_items | idx_keywords | Search functionality |
+| gallery_items | idx_created_at | Sort by date |
+| contacts | idx_status | Dashboard filters |
+| contacts | idx_source | Channel breakdown |
+| team_members | idx_position | Sort on page |
 
 ---
 
-## 10. Constraints & Validation
+## 12. Sample Data (Updated)
 
-### Primary Key Constraints
-- All `id` columns: AUTO_INCREMENT, NOT NULL, UNIQUE
-
-### Foreign Key Constraints
-```sql
-ALTER TABLE project_images ADD CONSTRAINT fk_project_images_project_id
-FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
-```
-
-**ON DELETE CASCADE:** If project deleted, all images deleted automatically
-
-### Unique Constraints
-- `admins.username` - No duplicate usernames
-- `admins.email` - No duplicate emails (best practice)
-
-### NOT NULL Constraints
-
-| Table | Field | Required |
-|-------|-------|----------|
-| admins | username, email, password_hash, created_at | Yes |
-| projects | title, description, category, created_at, updated_at | Yes |
-| project_images | project_id, image_path, uploaded_at | Yes |
-| contacts | name, email, message, created_at | Yes |
-| team_members | name, title, created_at | Yes |
-
----
-
-## 11. Data Types & Field Sizes
-
-### String Fields
-
-| Field | Type | Size | Rationale |
-|-------|------|------|-----------|
-| username | VARCHAR | 255 | Short, indexed |
-| email | VARCHAR | 255 | Standard email length |
-| title (project) | VARCHAR | 255 | Reasonable limit |
-| description | LONGTEXT | - | Full content, no limit |
-| category | VARCHAR | 50 | Fixed options |
-| status | VARCHAR | 50 | Fixed options |
-| source | VARCHAR | 50 | Fixed options |
-| phone | VARCHAR | 20 | International format +216XXXXXXXX |
-
-### Numeric Fields
-
-| Field | Type | Rationale |
-|-------|------|-----------|
-| id | INT AUTO_INCREMENT | Standard primary key |
-| position | INT | Sort order (0-1000) |
-| display_order | INT | Gallery sort order |
-| width, height | INT | Image dimensions in pixels |
-
-### Date/Time Fields
-
-| Field | Type | Rationale |
-|-------|------|-----------|
-| created_at | DATETIME | Record creation |
-| updated_at | DATETIME | Last modification |
-| last_login | DATETIME | Optional, nullable |
-| completion_date | DATE | No time needed |
-
-### Boolean Fields
-
-| Field | Type | Default |
-|-------|------|---------|
-| featured | BOOLEAN | FALSE |
-| is_active | BOOLEAN | TRUE |
-| replied | BOOLEAN | FALSE |
-
----
-
-## 12. Sample Data (Seeding)
-
-### Add Sample Admin
+### Add Standalone Gallery Item
 
 ```sql
-INSERT INTO admins (username, email, password_hash, created_at)
-VALUES ('adam', 'adam@bk-pergola.tn', '$2y$10$...', NOW());
+INSERT INTO gallery_items (project_id, image_path, thumbnail_path, description, keywords, featured, uploaded_at)
+VALUES (
+    NULL, -- Standalone
+    '/uploads/gallery/2025/before-after-pergola.jpg',
+    '/uploads/thumbs/2025/before-after-pergola.jpg',
+    'Transformation d\'une terrasse avec pergola aluminium',
+    'pergola,aluminium,terrasse,transformation,avant-après',
+    TRUE,
+    NOW()
+);
 ```
 
-**Generate bcrypt hash in PHP:**
-```php
-$hash = password_hash('secure_password_here', PASSWORD_BCRYPT);
-// Output: $2y$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcg7b3XeKeUxWdeS86E36joDSv2
-```
-
-### Add Sample Project
+### Add Project with Photos
 
 ```sql
+-- Create project
 INSERT INTO projects (title, description, category, location, completion_date, featured, display_order, created_at, updated_at)
 VALUES (
     'Pergola Moderne Tunis 2025',
@@ -707,15 +711,13 @@ VALUES (
     NOW(),
     NOW()
 );
-```
 
-### Add Images for Project
-
-```sql
-INSERT INTO project_images (project_id, image_path, thumbnail_path, alt_text, position, width, height, uploaded_at)
+-- Add photos to project (project_id = 1)
+INSERT INTO gallery_items (project_id, image_path, description, keywords, position, uploaded_at)
 VALUES 
-(1, '/uploads/projects/2025/pergola-main.jpg', '/uploads/thumbs/2025/pergola-main.jpg', 'Pergola vue de face', 0, 1200, 800, NOW()),
-(1, '/uploads/projects/2025/pergola-detail.jpg', '/uploads/thumbs/2025/pergola-detail.jpg', 'Detail de la structure', 1, 1200, 800, NOW());
+(1, '/uploads/gallery/2025/pergola-main.jpg', 'Vue générale de la pergola', 'pergola,vue-générale', 0, NOW()),
+(1, '/uploads/gallery/2025/pergola-detail.jpg', 'Détail de la structure', 'pergola,structure,détail', 1, NOW()),
+(1, '/uploads/gallery/2025/pergola-evening.jpg', 'Pergola en soirée', 'pergola,éclairage', 2, NOW());
 ```
 
 ### Add Team Member
@@ -735,7 +737,70 @@ VALUES (
 
 ---
 
-## 13. Backup & Recovery Strategy
+## 13. Query Examples (Updated)
+
+### Get All Gallery Items (Pinterest Feed)
+
+```php
+$items = $em->getRepository(GalleryItem::class)
+    ->createQueryBuilder('g')
+    ->select('g.id, g.imagePath, g.thumbnailPath, g.description')
+    ->orderBy('g.featured', 'DESC')
+    ->addOrderBy('g.uploadedAt', 'DESC')
+    ->setMaxResults(50) // Paginate
+    ->getQuery()
+    ->getResult();
+```
+
+### Search Gallery by Keywords
+
+```php
+$searchTerm = 'pergola';
+$results = $em->getRepository(GalleryItem::class)
+    ->createQueryBuilder('g')
+    ->where('g.keywords LIKE :query')
+    ->orWhere('g.description LIKE :query')
+    ->setParameter('query', '%' . $searchTerm . '%')
+    ->orderBy('g.uploadedAt', 'DESC')
+    ->getQuery()
+    ->getResult();
+```
+
+### Get Photos for Single Project
+
+```php
+$project = $em->getRepository(Project::class)->find(1);
+$photos = $em->getRepository(GalleryItem::class)
+    ->createQueryBuilder('g')
+    ->where('g.project = :project')
+    ->setParameter('project', $project)
+    ->orderBy('g.position', 'ASC')
+    ->getQuery()
+    ->getResult();
+```
+
+### Get Related Photos When Viewing a Single Item
+
+```php
+$item = $em->getRepository(GalleryItem::class)->find($itemId);
+$relatedPhotos = null;
+
+if ($item->getProject()) {
+    $relatedPhotos = $em->getRepository(GalleryItem::class)
+        ->createQueryBuilder('g')
+        ->where('g.project = :project')
+        ->andWhere('g.id != :currentId')
+        ->setParameter('project', $item->getProject())
+        ->setParameter('currentId', $itemId)
+        ->orderBy('g.position', 'ASC')
+        ->getQuery()
+        ->getResult();
+}
+```
+
+---
+
+## 14. Backup & Recovery Strategy
 
 ### Automated Backup
 
@@ -744,183 +809,64 @@ OVHcloud provides 24-hour automatic backup (recovery point if data loss).
 ### Manual Backup (Weekly)
 
 ```bash
-# Export database to SQL file
 mysqldump -u username -p database_name > backup_$(date +%Y%m%d).sql
-
-# Restore from backup
 mysql -u username -p database_name < backup_20260611.sql
 ```
 
-### Backup Retention
-
-- Keep last 4 weekly backups (1 month)
-- Store locally on laptop
-- Test restore monthly
-
 ---
 
-## 14. Query Examples (Common Use Cases)
-
-### Get All Featured Projects
-
-```php
-// Doctrine Query Language
-$projects = $em->getRepository(Project::class)
-    ->createQueryBuilder('p')
-    ->where('p.featured = true')
-    ->orderBy('p.displayOrder', 'ASC')
-    ->getQuery()
-    ->getResult();
-```
-
-### Get Images for a Project
-
-```php
-$project = $em->getRepository(Project::class)->find(1);
-$images = $project->getImages(); // Automatic via relationship
-```
-
-### Filter Contacts by Status
-
-```php
-$newContacts = $em->getRepository(Contact::class)
-    ->createQueryBuilder('c')
-    ->where('c.status = :status')
-    ->setParameter('status', 'new')
-    ->orderBy('c.createdAt', 'DESC')
-    ->setMaxResults(50)
-    ->getQuery()
-    ->getResult();
-```
-
-### Count Leads by Source
-
-```php
-$stats = $em->getRepository(Contact::class)
-    ->createQueryBuilder('c')
-    ->select('c.source, COUNT(c.id) as count')
-    ->groupBy('c.source')
-    ->getQuery()
-    ->getResult();
-// Result: [['source' => 'form', 'count' => 42], ['source' => 'whatsapp', 'count' => 15]]
-```
-
----
-
-## 15. Database Configuration
-
-### .env File
-
-```dotenv
-# database/mysql
-DATABASE_URL="mysql://user:password@localhost:3306/bk_pergola?serverVersion=8.0&charset=utf8mb4"
-```
-
-### Connection Pooling (Future)
-
-If scaling to multiple servers:
-```php
-// symfony.yaml - future config
-doctrine:
-    dbal:
-        connections:
-            default:
-                url: "%env(resolve:DATABASE_URL)%"
-                pool_size: 20 # Connection pooling
-```
-
----
-
-## 16. Performance Tips
+## 15. Performance Tips
 
 ### Lazy Loading vs Eager Loading
 
 **Lazy (default):**
 ```php
-$project = $repo->find(1);
-$images = $project->getImages(); // Executes separate query
+$item = $repo->find(1);
+$project = $item->getProject(); // Separate query
 ```
 
 **Eager (optimized):**
 ```php
-$project = $repo->createQueryBuilder('p')
-    ->leftJoin('p.images', 'i')
-    ->addSelect('i')
-    ->where('p.id = 1')
+$item = $repo->createQueryBuilder('g')
+    ->leftJoin('g.project', 'p')
+    ->addSelect('p')
+    ->where('g.id = 1')
     ->getQuery()
     ->getOneOrNullResult();
-// Images loaded in single query
 ```
 
-### Use Pagination for Large Lists
+### Pagination for Large Galleries
 
 ```php
 $page = 1;
-$perPage = 20;
+$perPage = 30;
 $offset = ($page - 1) * $perPage;
 
-$contacts = $repo->createQueryBuilder('c')
-    ->orderBy('c.createdAt', 'DESC')
+$items = $repo->createQueryBuilder('g')
+    ->orderBy('g.uploadedAt', 'DESC')
     ->setFirstResult($offset)
     ->setMaxResults($perPage)
     ->getQuery()
     ->getResult();
 ```
 
-### Cache Query Results (Future)
-
-```php
-$cache = $app->get('cache.app');
-$projects = $cache->get('featured_projects', function($item) use ($repo) {
-    $item->expiresAfter(3600); // 1 hour
-    return $repo->findFeatured();
-});
-```
-
 ---
 
-## 17. Schema Versioning
-
-### Current Schema Version: 1.0
-
-**Last Updated:** June 2026
-
-**Migration History:**
-- v1.0 (June 2026): Initial schema (admins, projects, project_images, contacts, team_members)
-
-### Future Versions
-
-- v1.1: Add `projects.price` field (for quotes)
-- v1.2: Add `contacts.rating` (client satisfaction)
-- v2.0: Add testimonials table
-
----
-
-## 18. Database Access Control
+## 16. Database Access Control
 
 ### Development
-
 - **User:** `root`
 - **Host:** `localhost`
 - **Database:** `bk_pergola_dev`
 
 ### Production (OVHcloud)
-
 - **User:** Auto-managed by OVHcloud
-- **Host:** `mysql.ovh.net` (or private host)
+- **Host:** `mysql.ovh.net`
 - **Database:** `db_bk_pergola_prod`
-- **Password:** Stored in `.env` (production server only)
-
-### Security
-
-- ✅ No hardcoded credentials
-- ✅ Least privilege (read-only users for reports)
-- ✅ SSL/TLS connection to database
-- ✅ Regular password rotation
 
 ---
 
-## 19. Monitoring & Maintenance
+## 17. Monitoring & Maintenance
 
 ### Check Database Size
 
@@ -930,35 +876,42 @@ FROM INFORMATION_SCHEMA.TABLES
 WHERE TABLE_SCHEMA = 'bk_pergola';
 ```
 
-### Slow Query Log
-
-```sql
-SET GLOBAL slow_query_log = 'ON';
-SET GLOBAL long_query_time = 2; -- Queries > 2 seconds logged
-```
-
 ### Optimize Tables (Monthly)
 
 ```sql
 OPTIMIZE TABLE admins;
 OPTIMIZE TABLE projects;
-OPTIMIZE TABLE project_images;
+OPTIMIZE TABLE gallery_items;
 OPTIMIZE TABLE contacts;
 OPTIMIZE TABLE team_members;
 ```
 
 ---
 
-## 20. Next Steps
+## 18. Key Differences: Old vs New Schema
 
-1. **Generate migrations:** `php bin/console make:migration`
-2. **Apply schema:** `php bin/console doctrine:migrations:migrate`
-3. **Seed data:** Insert sample records (see section 12)
-4. **Test queries:** Use repository methods in controllers
-5. **Monitor:** Check slow queries, backup regularly
+| Aspect | Old (project_images) | New (gallery_items) |
+|--------|---------------------|-------------------|
+| Photos | Must belong to project | Can be standalone OR in project |
+| Searchability | Not searchable | Keywords indexed for search |
+| Featured | On project level | Individual photo level |
+| Pinterest Layout | Not ideal | Perfect fit |
+| Admin Workflow | Add project first, then photos | Add photos standalone or to project |
+| Flexibility | Rigid structure | Flexible, multi-use |
 
 ---
 
-**Database Version:** 1.0  
+## 19. Next Steps
+
+1. **Migrate old schema** (if needed): Update from project_images to gallery_items
+2. **Generate migrations:** `php bin/console make:migration`
+3. **Apply schema:** `php bin/console doctrine:migrations:migrate`
+4. **Create repositories:** GalleryItemRepository with search/filter methods
+5. **Build API endpoints:** GET gallery, GET gallery/:id, search, etc.
+6. **Update ADMIN_PANEL.md:** New gallery management workflow
+
+---
+
+**Database Version:** 2.0 (Updated with unified gallery_items)  
 **Last Updated:** June 2026  
 **Status:** Production-ready
