@@ -18,7 +18,7 @@ This document defines the production architecture for a lead-generation website 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                        End Users (Browser)                      │
-└──────────────────────────┬───────────────────────────���──────────┘
+└──────────────────────────┬───────────────────────────────────────┘
                            │ HTTPS (SSL/TLS)
                            ↓
 ┌─────────────────────────────────────────────────────────────────┐
@@ -31,7 +31,7 @@ This document defines the production architecture for a lead-generation website 
 │                           ↕                                      │
 │  ┌────────────────────────────────────────────────────────────┐ │
 │  │ Backend (Symfony REST API)                                 │ │
-│  │ ├─ /api/projects (GET, POST, PUT, DELETE)                │ │
+│  │ ├─ /api/gallery (GET, POST, PUT, DELETE)                 │ │
 │  │ ├─ /api/contacts (POST, GET dashboard)                   │ │
 │  │ ├─ /api/auth (login, logout)                             │ │
 │  │ ├─ /api/uploads (image handling)                         │ │
@@ -41,15 +41,15 @@ This document defines the production architecture for a lead-generation website 
 │  ┌────────────────────────────────────────────────────────────┐ │
 │  │ Database (MySQL)                                           │ │
 │  │ ├─ projects                                               │ │
-│  │ ├─ project_images                                         │ │
+│  │ ├─ gallery_items                                          │ │
 │  │ ├─ contacts                                               │ │
 │  │ ├─ admins                                                 │ │
 │  │ └─ team_members                                           │ │
-│  └──────��─────────────────────────────────────────────────────┘ │
+│  └────────────────────────────────────────────────────────────┘ │
 │                                                                  │
 │  ┌────────────────────────────────────────────────────────────┐ │
 │  │ File Storage                                               │ │
-│  │ ├─ /storage/projects/ (project images)                   │ │
+│  │ ├─ /storage/gallery/ (gallery images)                    │ │
 │  │ ├─ /storage/thumbs/ (optimized thumbnails)              │ │
 │  │ └─ /public/uploads/ (web-accessible)                    │ │
 │  └────────────────────────────────────────────────────────────┘ │
@@ -90,7 +90,7 @@ This document defines the production architecture for a lead-generation website 
 - For 3K users + single admin dashboard, simple services are sufficient
 - You can upgrade to NgRx later if needed
 - Less complexity, easier to learn and test
-- Pattern: Centralized services (ProjectService, ContactService) emit data via Observables
+- Pattern: Centralized services (GalleryService, ContactService) emit data via Observables
 
 ### Backend: Symfony 6.x REST API
 
@@ -129,30 +129,70 @@ This document defines the production architecture for a lead-generation website 
 
 ## 3. Data Flow & Component Interaction
 
-### User Access Flow (Example: Viewing Portfolio)
+### User Access Flow (Example: Viewing Pinterest Gallery)
 
 ```
-1. User visits https://bk-pergola.tn/portfolio
+1. User visits https://bk-pergola.tn/gallery
    │
-2. Angular router loads PortfolioComponent
+2. Angular router loads GalleryComponent
    │
-3. Component calls ProjectService.getAllProjects()
+3. Component calls GalleryService.getAllItems()
    │
-4. ProjectService makes HTTP GET /api/projects
+4. GalleryService makes HTTP GET /api/gallery
    │
-5. Symfony ProjectController receives request
+5. Symfony GalleryController receives request
    │
-6. ProjectController queries Database via ProjectRepository
+6. GalleryController queries Database via GalleryItemRepository
    │
-7. MySQL returns project list with image references
+7. MySQL returns gallery items with image references
    │
-8. ProjectController returns JSON response
+8. GalleryController returns JSON response (thumbnails, descriptions, keywords)
    │
-9. ProjectService parses JSON, emits via Observable
+9. GalleryService parses JSON, emits via Observable
    │
-10. PortfolioComponent subscribes, receives data
+10. GalleryComponent subscribes, receives data
    │
-11. Component displays gallery (lazy-loaded images)
+11. Component displays Pinterest grid (lazy-loaded images)
+```
+
+### User Clicks Photo → Lightbox Opens
+
+```
+1. User clicks photo in grid
+   │
+2. Angular calls GalleryService.getItem(id)
+   │
+3. GalleryService makes HTTP GET /api/gallery/{id}
+   │
+4. Symfony GalleryController:
+   ├─ Gets the item details
+   ├─ If item has project_id → fetches related photos
+   └─ Returns { item, description, keywords, relatedPhotos }
+   │
+5. Lightbox opens with:
+   ├─ Main photo (full size)
+   ├─ Description (FR)
+   ├─ Keywords
+   └─ (If has project) Related photos below
+```
+
+### Search Gallery by Keywords
+
+```
+1. User types "pergola" in search box
+   │
+2. Angular calls GalleryService.search('pergola')
+   │
+3. GalleryService makes HTTP GET /api/gallery/search?q=pergola
+   │
+4. Symfony searches database:
+   ├─ FULLTEXT search on keywords column
+   ├─ OR description contains "pergola"
+   └─ Returns matching items
+   │
+5. GalleryService emits results
+   │
+6. Component displays filtered gallery
 ```
 
 ### Admin Login Flow
@@ -178,12 +218,51 @@ This document defines the production architecture for a lead-generation website 
 8. On logout, destroys session
 ```
 
+### Admin Uploads Gallery Photo
+
+```
+1. Admin goes to /admin/gallery
+   │
+2. Admin chooses:
+   ├─ Option A: New standalone photo (no project)
+   ├─ Option B: Add to existing project
+   └─ Option C: Create new project + add photos
+   │
+3. Admin:
+   ├─ Selects image file
+   ├─ Types description (FR)
+   ├─ Enters keywords (comma-separated)
+   ├─ Optionally selects project
+   └─ Clicks "Upload"
+   │
+4. Angular UploadService validates:
+   ├─ File type (jpg, png, webp)
+   ├─ File size (<5MB)
+   └─ Dimensions (min 800px)
+   │
+5. Uploads to POST /api/gallery/upload
+   │
+6. Symfony ImageService:
+   ├─ Moves file to /storage/gallery/
+   ├─ Generates thumbnail (200x200)
+   ├─ Optimizes for web (compression)
+   └─ Returns image_path + thumbnail_path
+   │
+7. Symfony saves to gallery_items table:
+   ├─ project_id (null if standalone)
+   ├─ image_path
+   ├─ thumbnail_path
+   ├─ description
+   ├─ keywords
+   └─ featured flag
+   │
+8. Admin sees confirmation: "Photo uploaded!"
+```
+
 ### Lead Capture Flow
 
 ```
 User fills contact form:
-   │
-   ├─ Name, Email, Phone, Message
    │
 2. Angular ContactForm validates (email format, required fields)
    │
@@ -199,7 +278,7 @@ User fills contact form:
    │
 6. Angular shows "Message sent" confirmation
    │
-7. Admin sees new lead in dashboard
+7. Admin sees new lead in dashboard (tab: "Contacts")
 ```
 
 ---
@@ -221,8 +300,8 @@ User fills contact form:
 - If expired/invalid, redirects to login
 
 **API Endpoints:**
-- Public endpoints: `/api/projects` (GET), `/api/contacts` (POST)
-- Protected endpoints: `/api/projects` (POST, PUT, DELETE), all admin endpoints
+- Public endpoints: `/api/gallery` (GET), `/api/contacts` (POST), `/api/projects` (GET)
+- Protected endpoints: `/api/gallery` (POST, PUT, DELETE), all admin endpoints
 - Each request checked for valid session before processing
 
 ### Input Validation & Sanitization
@@ -302,31 +381,42 @@ Deploy to OVHcloud
 
 ---
 
-## 6. Database Architecture
+## 6. Database Architecture (Updated for Pinterest Gallery)
 
 ### Entity Relationships
 
 ```
-admins (1) ──→ (many) sessions
-            └─→ (many) created_projects
+admins (1) ──→ (many) projects
+           └─→ (many) created galleries
 
-projects (1) ──→ (many) project_images
-          └─→ (many) contacts
+projects (1) ──→ (many) gallery_items
+          └─→ (0..1) per item [optional]
 
-contacts (1) ──→ (1) admin [assigned to]
+gallery_items 
+  ├─ Can be standalone (project_id = NULL)
+  ├─ Or linked to project (project_id = project.id)
+  └─ Searchable by keywords
 
-team_members (1) ──→ (self-referential for hierarchy)
+contacts (0..1) ──→ (many) admins
+               [admin assigned - optional]
+
+team_members [standalone - no foreign keys]
 ```
 
-### Table Overview
+### Table Overview (Updated)
 
 | Table | Purpose | Key Fields |
 |-------|---------|-----------|
 | `admins` | Website administrators | id, username, password_hash, email, created_at |
-| `projects` | Portfolio gallery items | id, title, description, category, featured, created_at |
-| `project_images` | Images per project | id, project_id, image_path, alt_text, position |
+| `projects` | Portfolio project groupings | id, title, description, category, featured, created_at |
+| `gallery_items` | Individual photos (NEW - replaces project_images) | id, project_id (nullable), image_path, description, keywords, featured, uploaded_at |
 | `contacts` | Lead submissions | id, name, email, phone, message, status, source, created_at |
 | `team_members` | Team profiles | id, name, title, bio, image_path, position |
+
+**Key Change:** `gallery_items` replaces `project_images`
+- Old: Photos mandatory tied to projects
+- New: Photos can be standalone OR linked to projects
+- Enables Pinterest-like flexible gallery
 
 **See [DATABASE.md](./DATABASE.md) for complete schema with SQL.**
 
@@ -337,19 +427,22 @@ team_members (1) ──→ (self-referential for hierarchy)
 ### RESTful Endpoints
 
 **Naming Convention:**
-- Resources as nouns: `/api/projects`, `/api/contacts`
+- Resources as nouns: `/api/gallery`, `/api/contacts`, `/api/projects`
 - HTTP verbs for actions: GET (read), POST (create), PUT (update), DELETE (remove)
-- IDs in path: `/api/projects/5`
+- IDs in path: `/api/gallery/5`
 
-**Example Endpoints:**
+**Example Endpoints (Gallery-focused):**
 
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
+| GET | `/api/gallery` | List all gallery items (Pinterest feed) |
+| GET | `/api/gallery/{id}` | Get single item with related project photos |
+| GET | `/api/gallery/search?q=pergola` | Search by keywords |
+| POST | `/api/gallery` | Upload new photo (admin) |
+| PUT | `/api/gallery/{id}` | Update photo details (admin) |
+| DELETE | `/api/gallery/{id}` | Delete photo (admin) |
 | GET | `/api/projects` | List all projects |
-| POST | `/api/projects` | Create new project (admin) |
-| GET | `/api/projects/{id}` | Get single project |
-| PUT | `/api/projects/{id}` | Update project (admin) |
-| DELETE | `/api/projects/{id}` | Delete project (admin) |
+| POST | `/api/projects` | Create project (admin) |
 | POST | `/api/contacts` | Submit contact form (public) |
 | GET | `/api/contacts` | List leads (admin) |
 | POST | `/api/auth/login` | Admin login |
@@ -373,23 +466,34 @@ AppComponent (root)
 ├─ RouterOutlet (page routing)
 └─ FooterComponent (company info, socials)
 
-Pages:
+Public Pages:
 ├─ HomePage
 │  ├─ HeroSection
-│  ├─ FeaturedProjects (uses GalleryGrid)
+│  ├─ FeaturedGallery (uses GalleryGrid)
 │  └─ CTASection
-├─ PortfolioPage
-│  ├─ FilterBar
-│  └─ GalleryGrid
-│     └─ ProjectCard (loop)
+├─ GalleryPage (Pinterest feed)
+│  ├─ SearchBar
+│  ├─ GalleryGrid
+│  │  └─ GalleryCard (loop) - shows thumbnail
+│  └─ GalleryLightbox (opens on photo click)
+│     ├─ Main photo (full size)
+│     ├─ Description + keywords
+│     └─ RelatedPhotos (if part of project)
+├─ ServicesPage
+├─ TeamPage
 ├─ ContactPage
 │  └─ ContactForm
+├─ AboutPage
 ├─ AdminLoginPage
 │  └─ LoginForm
 └─ AdminDashboard (guard-protected)
-   ├─ ProjectManagement (CRUD)
-   ├─ GalleryManagement (image upload)
-   ├─ LeadDashboard (contact list)
+   ├─ DashboardHome
+   ├─ GalleryManagement (CRUD + upload)
+   │  ├─ UploadForm (standalone or to project)
+   │  ├─ GalleryList (with edit/delete)
+   │  └─ ProjectManager
+   ├─ LeadDashboard (contacts)
+   │  └─ LeadList (status, source, filters)
    └─ TeamManagement
 ```
 
@@ -397,6 +501,7 @@ Pages:
 
 ```
 Injectable Services:
+├─ GalleryService (GET/POST/PUT/DELETE gallery items, search)
 ├─ ProjectService (GET/POST/PUT/DELETE projects)
 ├─ ContactService (POST contact, GET leads)
 ├─ AuthService (login, logout, session check)
@@ -415,16 +520,17 @@ Observable Pattern:
 ```
 Routes:
 ├─ / (home)
-├─ /portfolio (gallery)
+├─ /gallery (Pinterest gallery)
+├─ /gallery/:id (lightbox view)
 ├─ /services (services page)
 ├─ /team (team page)
 ├─ /contact (contact form)
 ├─ /about (about page)
-├�� /admin/login (public)
+├─ /admin/login (public)
 └─ /admin/** (protected by AdminAuthGuard)
    ├─ /admin/dashboard
+   ├─ /admin/gallery (CRUD)
    ├─ /admin/projects (CRUD)
-   ├─ /admin/gallery (image management)
    ├─ /admin/leads (contact dashboard)
    └─ /admin/team (team profiles)
 
@@ -458,7 +564,7 @@ Guards:
 
 - Doctrine ORM queries
 - Type-safe, auto-generated
-- Example: `ProjectRepository::findFeatured()`
+- Example: `GalleryItemRepository::searchByKeywords()`
 - Example: `ContactRepository::findRecent(10)`
 
 ### Entity Layer
@@ -470,7 +576,7 @@ Guards:
 
 ---
 
-## 10. Image Handling & File Storage
+## 10. Gallery Image Handling & File Storage (Updated)
 
 ### Upload Flow
 
@@ -480,19 +586,24 @@ Guards:
    ├─ File type (jpg, png, webp)
    ├─ File size (<5MB)
    └─ Dimensions (min 800px wide)
-3. Uploads to POST /api/uploads
+3. Uploads to POST /api/gallery/upload
 4. Symfony ImageService:
-   ├─ Moves file to /storage/projects/
+   ├─ Moves file to /storage/gallery/
    ├─ Generates thumbnail (200x200)
    ├─ Optimizes for web (compression)
    └─ Returns image_path + thumbnail_path
-5. Database stores references in project_images
-6. Frontend displays optimized images
+5. Symfony saves to gallery_items:
+   ├─ image_path, thumbnail_path
+   ├─ description (FR)
+   ├─ keywords (searchable)
+   ├─ project_id (null if standalone)
+   └─ featured flag
+6. Frontend displays in gallery grid
 ```
 
 ### Image Optimization
 
-- **Storage:** Original files in `/storage/projects/`
+- **Storage:** Original files in `/storage/gallery/`
 - **Thumbnails:** Auto-generated 200x200px in `/storage/thumbs/`
 - **Lazy Loading:** Images load on scroll (Angular lazy-load directive)
 - **Responsive Images:** Multiple sizes for mobile/desktop (CSS)
@@ -513,7 +624,7 @@ Guards:
 | Event | Recipient | Template |
 |-------|-----------|----------|
 | Contact form submitted | contact@bk-pergola.tn | New lead notification |
-| Admin creates project | (admin) | Confirmation |
+| Admin uploads gallery item | (optional) | Confirmation |
 | (Optional) Contact reply | user email | Custom response |
 
 ### Implementation
@@ -571,7 +682,7 @@ Guards:
 
 - Currently: Direct queries
 - If scaling: Add Redis for frequently accessed data
-- Example: Featured projects cache (5-minute TTL)
+- Example: Featured gallery items cache (5-minute TTL)
 
 ### Image Optimization
 
@@ -579,6 +690,7 @@ Guards:
 - Responsive sizing (mobile 500px, desktop 1200px)
 - WebP format with PNG fallback
 - Compression before storage
+- FULLTEXT search on keywords for fast filtering
 
 ---
 
@@ -695,12 +807,13 @@ The current architecture is **scale-ready** (no refactoring needed if traffic gr
 | Frontend | Angular 17 + Tailwind | Modern, familiar, customizable |
 | Backend | Symfony 6 REST API | Proven, secure, scalable |
 | Database | MySQL + Doctrine ORM | Included, type-safe, migrations |
+| Gallery | Flexible gallery_items table | Supports Pinterest-style layout |
 | Authentication | Sessions (bcrypt) | Simple, secure, multi-admin ready |
 | State Management | Services + RxJS | No overkill, scales fine |
 | Email | Zimbra SMTP | Free, included with hosting |
 | Hosting | OVHcloud Startup | Tunisia-based, affordable, SSL included |
 | i18n | Static JSON | Low overhead, flexible |
-| Image Storage | Local disk | Free, fast for low volume |
+| Image Storage | Local disk + optimization | Free, fast for low volume |
 | Styling | TailwindCSS | Utility-first, no template feel |
 
 ---
@@ -711,7 +824,7 @@ The current architecture is **scale-ready** (no refactoring needed if traffic gr
 - `backend/public/index.php` → Symfony kernel → routes.yaml → controllers
 
 ### Frontend Entry Point
-- `frontend/src/main.ts` → bootstrapApplication() → AppComponent → routing
+- `frontend/src/main.ts` → bootstrapApplication() ��� AppComponent → routing
 
 ### Configuration Files
 - `backend/.env` → Database, SMTP, app settings
@@ -726,13 +839,13 @@ The current architecture is **scale-ready** (no refactoring needed if traffic gr
 ## 20. Next Steps
 
 1. **Read [DEVELOPMENT_PLAN.md](./DEVELOPMENT_PLAN.md)** — Week-by-week sprint schedule
-2. **Read [DATABASE.md](./DATABASE.md)** — Complete schema and migrations
+2. **Read [DATABASE.md](./DATABASE.md)** — Complete schema with gallery_items table
 3. **Read [API_SPEC.md](./API_SPEC.md)** — All endpoints with examples
 4. **Follow [SETUP.md](./SETUP.md)** — Set up local development
 5. **Follow [DEPLOYMENT.md](./DEPLOYMENT.md)** — Deploy to OVHcloud
 
 ---
 
-**Architecture Version:** 1.0  
+**Architecture Version:** 2.0 (Updated with gallery_items table)  
 **Last Updated:** June 2026  
 **Status:** Ready for development
